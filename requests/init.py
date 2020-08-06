@@ -80,6 +80,31 @@ for i in TSDRS:
             url = f'https://tsdrsec.uspto.gov/ts/cd/casedoc/sn{number}/{doc_id}/1/webcontent?scale=1'
             TEASES.append(url)
 
+def parse_tags(string, tag):
+    try:
+        if tag == 'th': content = string.split('<td')[0]
+        else: content = string.split('<td')[1]
+        last_index = content.find('</')
+        content = content[:last_index]
+        content_reverse = ''
+        for i in range(len(content)):
+            if content[-i-1] == '>': break
+            content_reverse += content[-i-1]
+        content = ''
+        for i in range(len(content_reverse)):
+            content += content_reverse[-i-1]
+
+        if content == '*':
+            content = string.split('<td')[0]
+            first_index = content.find('font>')
+            content = content[first_index:]
+            last_index = content.find('</font>')
+            content = content[5:last_index]
+
+        return content.strip()
+
+    except: return ""
+
 index = 0
 for i in TEASES:
     html = make_request(i)
@@ -90,31 +115,37 @@ for i in TEASES:
     make_html_file(f'info/info_{index}', table)
     for i in trs:
         try:
-            th = i.split('<td')[0]
-            td = i.split('<td')[1]
-            last_index = th.find('</')
-            th = th[:last_index]
-            last_index = td.find('</')
-            td = td[:last_index]
-            th_res = ''
-            td_res = ''
-            for i in range(len(th)):
-                if th[-i-1] == '>': break
-                th_res += th[-i-1]
-            th = ''
-            for i in range(len(th_res)):
-                if i > 0:
-                    if th_res[-i] == " " and th_res[-i-1] == " ": continue
-                th += th_res[-i-1]
+            print('content: '+i)
+            th = parse_tags(i, 'th')
+            print('th: '+th)
+            td = parse_tags(i, 'td')
+            print('td: '+td)
+            print('-----------------------------')
+            # th = i.split('<td')[0]
+            # td = i.split('<td')[1]
+            # last_index = th.find('</')
+            # th = th[:last_index]
+            # last_index = td.find('</')
+            # td = td[:last_index]
+            # th_res = ''
+            # td_res = ''
+            # for i in range(len(th)):
+            #     if th[-i-1] == '>': break
+            #     th_res += th[-i-1]
+            # th = ''
+            # for i in range(len(th_res)):
+            #     if i > 0:
+            #         if th_res[-i] == " " and th_res[-i-1] == " ": continue
+            #     th += th_res[-i-1]
 
-            for i in range(len(td)):
-                if td[-i-1] == '>': break
-                td_res += td[-i-1]
-            td = ''
-            for i in range(len(td_res)):
-                if i > 0:
-                    if td_res[-i] == " " and td_res[-i-1] == " ": continue
-                td += td_res[-i-1]
-            print(th+'\n'+td+'\n----------------')
+            # for i in range(len(td)):
+            #     if td[-i-1] == '>': break
+            #     td_res += td[-i-1]
+            # td = ''
+            # for i in range(len(td_res)):
+            #     if i > 0:
+            #         if td_res[-i] == " " and td_res[-i-1] == " ": continue
+            #     td += td_res[-i-1]
+            # print(th+'\n'+td+'\n----------------')
         except: continue
     # print(trs)
