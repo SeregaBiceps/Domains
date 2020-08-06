@@ -1,5 +1,6 @@
 import requests
 import time
+import urllib.request, json
 # import logging
 # try:
 #     import http.client as http_client
@@ -37,7 +38,7 @@ def get_key(url):
 
 def make_html_file(src, html):
 
-    with open(f'requests/{src}.html', 'w') as output_file:
+    with open(f'spider_domain/{src}.html', 'w') as output_file:
         output_file.write(html)
 
 name = 'Dildo'
@@ -46,15 +47,15 @@ info = get_key(fp_url)
 key = info['key']
 
 fp_html = make_request(fp_url)
-make_html_file('main_pages/first_page', fp_html)
+make_html_file('html/main_pages/first_page', fp_html)
 
 sp_url = fp_url + info['searchss']
 sp_html = make_request(sp_url)
-make_html_file('main_pages/second_page', sp_html)
+make_html_file('html/main_pages/second_page', sp_html)
 
 tp_url = f'http://tmsearch.uspto.gov/bin/showfield?f=toc&state={key}&p_search=searchss&p_L=50&BackReference=&p_plural=yes&p_s_PARA1=live&p_tagrepl%7E%3A=PARA1%24LD&PARA2&p_s_PARA2={name}&p_tagrepl%7E%3A=PARA2%24COMB&p_op_ALL=AND&a_default=search&a_search=Submit+Query&a_search=Submit+Query'
 tp_html = make_request(tp_url)
-make_html_file('main_pages/third_page', tp_html)
+make_html_file('html/main_pages/third_page', tp_html)
 
 hrefs = tp_html.split('<A HREF="')
 TSDRS = []
@@ -68,7 +69,7 @@ for i in TSDRS:
     number = (i.split('caseNumber=')[1]).split('&')[0]
     url = f'https://tsdr.uspto.gov/docsview/sn{number}'
     html = make_request(url)
-    make_html_file(f'TSDRS/TSDR_{number}', html)
+    make_html_file(f'html/TSDRS/TSDR_{number}', html)
     hrefs = html.split('<a href="')
     for i in hrefs:
         RF_index = i.find('TEAS RF New Application')
@@ -101,51 +102,55 @@ def parse_tags(string, tag):
             last_index = content.find('</font>')
             content = content[5:last_index]
 
+        if content == '' and tag == 'th':
+            content = string.split('<td')[0]
+            first_index = content.find('</a>')+4
+            content = content[first_index:]
+            last_index = content.find('</font')
+            content = content[:last_index]
+
+        if content == '': return 'empty' 
+
         return content.strip()
 
-    except: return ""
+    except: 
+        return "empty"
 
 index = 0
+domains = set()
 for i in TEASES:
     html = make_request(i)
-    make_html_file(f'TEASES/TEAS_{index}', html)
+    make_html_file(f'html/TEASES/TEAS_{index}', html)
     index += 1
     table = html.split('<tr bgcolor="')[1]
+    last_index = table.find('</table>')
+    table = table[:last_index]
     trs = table.replace('\t', '').replace('\n', '').split('<tr')
-    make_html_file(f'info/info_{index}', table)
-    for i in trs:
-        try:
-            print('content: '+i)
-            th = parse_tags(i, 'th')
-            print('th: '+th)
-            td = parse_tags(i, 'td')
-            print('td: '+td)
-            print('-----------------------------')
-            # th = i.split('<td')[0]
-            # td = i.split('<td')[1]
-            # last_index = th.find('</')
-            # th = th[:last_index]
-            # last_index = td.find('</')
-            # td = td[:last_index]
-            # th_res = ''
-            # td_res = ''
-            # for i in range(len(th)):
-            #     if th[-i-1] == '>': break
-            #     th_res += th[-i-1]
-            # th = ''
-            # for i in range(len(th_res)):
-            #     if i > 0:
-            #         if th_res[-i] == " " and th_res[-i-1] == " ": continue
-            #     th += th_res[-i-1]
+    make_html_file(f'html/Documents/Document_{index}', table)
+    dict_of_info = {}
+    for i in range(1, len(trs)):
+        th = parse_tags(trs[i], 'th')
+        td = parse_tags(trs[i], 'td')
+        if td == 'empty' and th == 'empty': continue
+        dict_of_info[th] = td
+        if '@' in td:
+            if ';' in td:
+                mails = td.split('; ')
+                for i in mails: domains.add(i)
+            else: domains.add(td)
 
-            # for i in range(len(td)):
-            #     if td[-i-1] == '>': break
-            #     td_res += td[-i-1]
-            # td = ''
-            # for i in range(len(td_res)):
-            #     if i > 0:
-            #         if td_res[-i] == " " and td_res[-i-1] == " ": continue
-            #     td += td_res[-i-1]
-            # print(th+'\n'+td+'\n----------------')
-        except: continue
-    # print(trs)
+cnt = 0
+for domain in domains:
+    domain = domain.split('@')[1]
+    url = f'http://api.whois.vu/?q={domain}'
+    with urllib.request.urlopen(url) as url:
+        data = json.loads(url.read().decode())
+        with open(f'spider_domain/py/parsed_domains/domain_{cnt}.py', 'w') as dom_file:
+            domain = domain.split('.')[0]
+            dom_file.write(f'{domain}={data}')
+    cnt += 1
+
+with open(f'spider_domain/py/parsed_TSDRs/TSDR_{index}.py', 'w') as result:
+    result.write(f'dict_of_info = {str(dict_of_info)}')
+
+    
