@@ -12,8 +12,9 @@ def remove_files():
         direc = os.listdir(f'{d}')
         for i in direc:
             files = os.listdir(f'{d}/{i}/')
-            for j in files:
-                os.remove(f'{d}/{i}/{j}')
+            for j in file
+                try: os.remove(f'{d}/{i}/{j}')
+                except: continue
     print('Old files has been removed!')
 
 def make_request(url):
