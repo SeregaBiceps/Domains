@@ -1,6 +1,7 @@
 import requests
 import time
 import urllib.request, json
+import os
 # import logging
 # try:
 #     import http.client as http_client
@@ -15,6 +16,16 @@ import urllib.request, json
 # requests_log.propagate = True
 
 session = requests.session()
+
+def remove_files():
+    dirs = os.listdir('spider_domain/')
+    for d in dirs:
+        if '.' in d: continue
+        direc = os.listdir(f'spider_domain/{d}')
+        for i in direc:
+            files = os.listdir(f'spider_domain/{d}/{i}/')
+            for j in files:
+                os.remove(f'spider_domain/{d}/{i}/{j}')
 
 def make_request(url):
 
@@ -41,10 +52,12 @@ def make_html_file(src, html):
     with open(f'spider_domain/{src}.html', 'w') as output_file:
         output_file.write(html)
 
-name = 'Dildo'
+name = 'Fake'
 fp_url = 'http://tmsearch.uspto.gov/'
 info = get_key(fp_url)
 key = info['key']
+
+remove_files()
 
 fp_html = make_request(fp_url)
 make_html_file('html/main_pages/first_page', fp_html)
@@ -68,7 +81,13 @@ TEASES = []
 for i in TSDRS:
     number = (i.split('caseNumber=')[1]).split('&')[0]
     url = f'https://tsdr.uspto.gov/docsview/sn{number}'
-    html = make_request(url)
+    cnt = 0
+    while True:
+        if cnt == 10: make_html_file(f'html/TSDRS/TSDR_{number}', 'reached the limit of requests')
+        try: html = make_request(url)
+        except: make_html_file(f'html/TSDRS/TSDR_{number}', 'permission denied')
+        if '503 Service Unavailable' not in html: break
+        cnt += 1
     make_html_file(f'html/TSDRS/TSDR_{number}', html)
     hrefs = html.split('<a href="')
     for i in hrefs:
@@ -109,7 +128,11 @@ def parse_tags(string, tag):
             last_index = content.find('</font')
             content = content[:last_index]
 
-        if content == '': return 'empty' 
+        if content == '': return 'empty'
+
+        if '/a>' in content:
+            first_index = content.find('/a>')
+            content = content[first_index+3:]
 
         return content.strip()
 
@@ -117,14 +140,11 @@ def parse_tags(string, tag):
         return "empty"
 
 index = 0
-domains = set()
+domains = []
 for i in TEASES:
     html = make_request(i)
     make_html_file(f'html/TEASES/TEAS_{index}', html)
-    index += 1
-    table = html.split('<tr bgcolor="')[1]
-    last_index = table.find('</table>')
-    table = table[:last_index]
+    table = html.split('<tr bgcolor="')[1].replace('&nbsp;', '')
     trs = table.replace('\t', '').replace('\n', '').split('<tr')
     make_html_file(f'html/Documents/Document_{index}', table)
     dict_of_info = {}
@@ -135,22 +155,40 @@ for i in TEASES:
         dict_of_info[th] = td
         if '@' in td:
             if ';' in td:
-                mails = td.split('; ')
-                for i in mails: domains.add(i)
-            else: domains.add(td)
+                mails = td.split(';')
+                for i in mails: domains.append(i.strip())
+            else: domains.append(td)
+
+    with open(f'spider_domain/py/parsed_TSDRs/TSDR_{index}.py', 'w') as result:
+        result.write(f'dict_of_info = {str(dict_of_info)}')
+    
+    index += 1
+
+domain = set()
+for i in domains:
+    domain.add(i.split('@')[1])
+domains = domain
 
 cnt = 0
 for domain in domains:
-    domain = domain.split('@')[1]
     url = f'http://api.whois.vu/?q={domain}'
-    with urllib.request.urlopen(url) as url:
-        data = json.loads(url.read().decode())
+    try:
+        with urllib.request.urlopen(url) as url:
+            data = json.loads(url.read().decode())
+
+        whois_arr = data['whois'].split('\r\n')
+        data['whois'] = {}
+        for i in whois_arr:
+            if '>>>' in i or 'NOTICE' in i or 'URL of the ICANN' in i or 'TERMS OF USE' in i or 'You agree that' in i: continue
+            if ': ' not in i: continue
+            key_value = i.split(': ')
+            key = key_value[0]
+            value = key_value[1]
+            data['whois'][key] = value
+
         with open(f'spider_domain/py/parsed_domains/domain_{cnt}.py', 'w') as dom_file:
             domain = domain.split('.')[0]
-            dom_file.write(f'{domain}={data}')
-    cnt += 1
-
-with open(f'spider_domain/py/parsed_TSDRs/TSDR_{index}.py', 'w') as result:
-    result.write(f'dict_of_info = {str(dict_of_info)}')
-
-    
+            dom_file.write(f'_{domain}={data}')
+        cnt += 1
+    except: pass
+print('domain has been successfully parsed')
