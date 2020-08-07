@@ -190,5 +190,5 @@ for domain in domains:
             domain = domain.split('.')[0]
             dom_file.write(f'_{domain}={data}')
         cnt += 1
-    except: pass
+    except: continue
 print('domain has been successfully parsed')
