@@ -18,14 +18,14 @@ import os
 session = requests.session()
 
 def remove_files():
-    dirs = os.listdir('spider_domain/')
+    dirs = os.listdir('.')
     for d in dirs:
         if '.' in d: continue
-        direc = os.listdir(f'spider_domain/{d}')
+        direc = os.listdir(f'{d}')
         for i in direc:
-            files = os.listdir(f'spider_domain/{d}/{i}/')
+            files = os.listdir(f'{d}/{i}/')
             for j in files:
-                os.remove(f'spider_domain/{d}/{i}/{j}')
+                os.remove(f'{d}/{i}/{j}')
 
 def make_request(url):
 
@@ -49,10 +49,10 @@ def get_key(url):
 
 def make_html_file(src, html):
 
-    with open(f'spider_domain/{src}.html', 'w') as output_file:
+    with open(f'{src}.html', 'w') as output_file:
         output_file.write(html)
 
-name = 'Fake'
+name = input('insert word\n')
 fp_url = 'http://tmsearch.uspto.gov/'
 info = get_key(fp_url)
 key = info['key']
@@ -159,7 +159,7 @@ for i in TEASES:
                 for i in mails: domains.append(i.strip())
             else: domains.append(td)
 
-    with open(f'spider_domain/py/parsed_TSDRs/TSDR_{index}.py', 'w') as result:
+    with open(f'py/parsed_TSDRs/TSDR_{index}.py', 'w') as result:
         result.write(f'dict_of_info = {str(dict_of_info)}')
     
     index += 1
@@ -186,7 +186,7 @@ for domain in domains:
             value = key_value[1]
             data['whois'][key] = value
 
-        with open(f'spider_domain/py/parsed_domains/domain_{cnt}.py', 'w') as dom_file:
+        with open(f'py/parsed_domains/domain_{cnt}.py', 'w') as dom_file:
             domain = domain.split('.')[0]
             dom_file.write(f'_{domain}={data}')
         cnt += 1
