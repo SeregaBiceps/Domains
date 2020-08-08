@@ -3,44 +3,44 @@ import time
 import urllib.request, json
 import os
 from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
 
 def remove_files():
-    print('Removing old files...')
+    print('Removing old files...', end=" ")
     dirs = os.listdir('.')
     for d in dirs:
         if '.' in d: continue
         direc = os.listdir(f'{d}')
         for i in direc:
             files = os.listdir(f'{d}/{i}/')
-            for j in file
+            for j in files:
                 try: os.remove(f'{d}/{i}/{j}')
                 except: continue
-    print('Old files has been removed!')
+    print('Ok!')
 
 def make_request(url):
-    print('Making a request...')
+    print(f'Request to {url}...', end=" ")
     headers = {
     'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.143 Safari/537.36'
     }
     r = session.get(url, headers=headers, timeout=5)
-    print('Got some info!')
+    if '503 Service Unavailable' in r.text.encode('utf-8').decode('cp1251'): print('503 Error!')
+    else: print('Ok!')
     return r.text.encode('utf-8').decode('cp1251')
 
 def get_key(url):
-    print('I\'m searching for token and next href...')
-    main_html = make_request(url)
-    hrefs = main_html.split('<A HREF="')
-    for i in hrefs:
-        if 'searchss' in i:
-            last_index = i.find('"')
-            searchss = i[:last_index]
+    html = make_request(url)
+    soup = BeautifulSoup(html, 'lxml')
+    for i in soup.find_all('a'):
+        if 'searchss' in i.get('href'):
+            searchss = i.get('href')
+            break
     key = searchss.split('state=')[1]
     info = {'searchss': searchss, 'key': key}
-    print('There they are!')
     return info
 
 def make_html_file(src, html):
-    print('Just trashing your folders...')
+    print(f"Making file {src.split('/')[-1]}.html...", end=" ")
     folder = src.split('/')[0]
     subfolder = src.split('/')[1]
     if folder not in os.listdir():
@@ -49,19 +49,17 @@ def make_html_file(src, html):
         os.mkdir(f'{folder}/{subfolder}/')
     with open(f'{src}.html', 'w') as output_file:
         output_file.write(html)
+    print('Ok!')
 
 def make_TSDRs(html):
-    print('Making TSDRs...')
     soup = BeautifulSoup(html, 'lxml')
     TSDRS = []
     for i in soup.find_all('a'):
         if 'TSDR' in i.text:
             TSDRS.append(i.get('href'))
-    print('Done!')
     return TSDRS
 
 def make_TEASes(TSDRS):
-    print('Making TEASes...')
     TEASES = []
     for i in TSDRS:
         number = (i.split('caseNumber=')[1]).split('&')[0]
@@ -72,9 +70,6 @@ def make_TEASes(TSDRS):
             try: html = make_request(url)
             except: make_html_file(f'html/TSDRS/TSDR_{number}', 'permission denied')
             if '503 Service Unavailable' not in html: break
-            else:
-                if cnt <= 3: print('Bullshit info, coming back...')
-                else: print('GIVE ME THE FUCKING INFO!')
             cnt += 1
         make_html_file(f'html/TSDRS/TSDR_{number}', html)
 
@@ -87,16 +82,15 @@ def make_TEASes(TSDRS):
                 doc_id = href.split('docId=')[1]
                 url = f'https://tsdrsec.uspto.gov/ts/cd/casedoc/sn{number}/{doc_id}/1/webcontent?scale=1'
                 TEASES.append(url)
-    print('Done with these requests!')
     return TEASES
 
 def parse_TEASEs(TEASES):
     index = 0
     domains = []
     for i in TEASES:
-        print('Parsing TEAS...')
         html = make_request(i)
         make_html_file(f'html/TEASES/TEAS_{index}', html)
+        print(f'Parsing TEAS_{index}...', end=" ")
         soup = BeautifulSoup(html, 'lxml')
         titles = ['SERIAL NUMBER']
         for i in soup.find_all('th', colspan='2'): titles.append(i.text)
@@ -119,52 +113,72 @@ def parse_TEASEs(TEASES):
                 elif '@' in td: domains.append(td)
                 elems[th] = td
             except: continue
+        print('Ok!')
+        print(f'Making file TEAS_{index}.py...', end=" ")
         if 'py' not in os.listdir():
             os.mkdir('py')
-        if 'parsed_TSDRs' not in os.listdir('py'):
-            os.mkdir('py/parsed_TSDRs/')
-        with open(f'py/parsed_TSDRs/TSRD_{index}.py', 'w') as TSDR:
-            TSDR.write(f'TSDR = {parsed}')
+        if 'parsed_TEASes' not in os.listdir('py'):
+            os.mkdir('py/parsed_TEASes/')
+        with open(f'py/parsed_TEASes/TEAS_{index}.py', 'w') as TEAS:
+            TEAS.write(f'TEAS = {parsed}')
+        print('Ok!')
         index += 1
-        print('I got one!')
-    print('Phew... made it!')
     return domains
 
+def make_json(url):
+    print(f'Request to {url}...', end=" ")
+    with urllib.request.urlopen(url) as url:
+        data = json.loads(url.read().decode())
+    print('Ok!')
+    return data
+    
+def make_file(data, cnt, domain):
+    print(f'Making file domain_{cnt}.py...', end=" ")
+    if 'py' not in os.listdir():
+        os.mkdir('py')
+    if 'parsed_domains' not in os.listdir('py'):
+        os.mkdir('py/parsed_domains/')
+    with open(f'py/parsed_domains/domain_{cnt}.py', 'w') as dom_file:
+        domain = domain.split('.')[0].replace('-', '_')
+        dom_file.write(f'_{domain}={data}')
+    print('Ok!')
+
+def parse_domain(data, domain):
+    print(f'Parsing domain {domain}...', end=" ")
+    whois_arr = data['whois'].split('\r\n')
+    data['whois'] = {}
+    for i in whois_arr:
+        if '>>>' in i or 'NOTICE' in i or 'URL of the ICANN' in i or 'TERMS OF USE' in i or 'You agree that' in i: continue
+        if ': ' not in i: continue
+        key_value = i.split(': ')
+        key = key_value[0].strip()
+        value = key_value[1].strip()
+        data['whois'][key] = value
+    print('Ok!')
+    return data   
+
 def parse_domains(domains):
-    print('Now some serios stuff!')
     domain = set()
     for i in domains:
         domain.add(i.split('@')[1])
     domains = domain
     cnt = 0
+    result = {}
+    free_domains = {}
     for domain in domains:
-        print('Parsing domain...')
         url = f'http://api.whois.vu/?q={domain}'
         try:
-            with urllib.request.urlopen(url) as url:
-                data = json.loads(url.read().decode())
-
-            whois_arr = data['whois'].split('\r\n')
-            data['whois'] = {}
-            for i in whois_arr:
-                if '>>>' in i or 'NOTICE' in i or 'URL of the ICANN' in i or 'TERMS OF USE' in i or 'You agree that' in i: continue
-                if ': ' not in i: continue
-                key_value = i.split(': ')
-                key = key_value[0]
-                value = key_value[1]
-                data['whois'][key] = value
-
-            if 'py' not in os.listdir():
-                os.mkdir('py')
-            if 'parsed_domains' not in os.listdir('py'):
-                os.mkdir('py/parsed_domains/')
-            with open(f'py/parsed_domains/domain_{cnt}.py', 'w') as dom_file:
-                domain = domain.split('.')[0]
-                dom_file.write(f'_{domain}={data}')
+            data = make_json(url)
+            data = parse_domain(data, domain)
+            make_file(data, cnt, domain)
+            result[domain] = datetime.fromtimestamp(data['expires'])
+            if (datetime.now() + timedelta(7) > datetime.fromtimestamp(data['expires'])):
+                free_domains[domain] = data
             cnt += 1
-        except: continue
-        print('Parsed!')
-    print('Finally all done!')
+        except:
+            print(f'Something went wrong with domain: {domain}')
+            continue
+    return [result, free_domains]
 
 session = requests.session()
 name = input('insert word\n')
@@ -188,4 +202,17 @@ make_html_file('html/main_pages/third_page', tp_html)
 TSDRS = make_TSDRs(tp_html)
 TEASES = make_TEASes(TSDRS)
 domains = parse_TEASEs(TEASES)
-parse_domains(domains)
+array = parse_domains(domains)
+result = array[0]
+free_domains = array[1]
+print('All done!')
+print(f'Found {len(result)} domains\nExpire dates:')
+for i in result:
+    print(f'{i}: {result[i]}')
+if len(free_domains) > 0:
+    print(f'Found free domain(s): {free_domains}')
+    print('Expire dates:')
+    for i in free_domains:
+        print(f"{i}: {datetime.fromtimestamp(free_domains[i]['expires'])}")
+else:
+    print('There\'s no expired domain')
