@@ -54,12 +54,22 @@ def make_html_file(src, html):
         except:
             output_file.write('None')
 
-def make_TSDRs(html):
+
+def make_TSDRs(html, key):
     soup = BeautifulSoup(html, 'lxml')
     TSDRS = []
-    for i in soup.find_all('a'):
+    hrefs = soup.find_all('a')
+    for i in hrefs:
         if 'TSDR' in i.text:
             TSDRS.append(i.get('href'))
+    while len(TSDRS) >= 50 and len(TSDRS) % 50 == 0:
+        at = len(TSDRS) + 1 
+        url2= f"http://tmsearch.uspto.gov/bin/showfield?f=toc&state={key[:-4]}.2.{at}"
+        html2 = BeautifulSoup(make_request(url2), 'lxml')
+        hrefs2 = html2.find_all('a')
+        for j in hrefs2:
+            if 'TSDR' in j.text:
+                TSDRS.append(j.get('href'))
     return TSDRS
 
 def make_TEASes(TSDRS):
@@ -183,7 +193,7 @@ def print_result(i, domain, teas):
     print('---------------------------------')
 
 session = requests.session()
-name = input('insert word\n')
+name = 'knife'# input('insert word\n')
 fp_url = 'http://tmsearch.uspto.gov/'
 info = get_key(fp_url)
 key = info[0]['key']
@@ -201,7 +211,7 @@ tp_url = f'http://tmsearch.uspto.gov/bin/showfield?f=toc&state={key}&p_search=se
 tp_html = make_request(tp_url)
 make_html_file('html/main_pages/third_page', tp_html)
 
-TSDRS = make_TSDRs(tp_html)
+TSDRS = make_TSDRs(tp_html, key)
 TEASES = make_TEASes(TSDRS)
 result = parse_TEASEs(TEASES)
 
