@@ -178,6 +178,7 @@ def print_result(i, domain, teas):
     try:
         if 'IMAGEOUT' not in i[teas]['MARK INFORMATION']['MARK']:
             print(f"Mark: {i[teas]['MARK INFORMATION']['MARK']}")
+        else: print('Mark: unknown')
     except: print('Mark: unknown')
     print('---------------------------------')
 
@@ -192,7 +193,7 @@ remove_files()
 fp_html = info[1]
 make_html_file('html/main_pages/first_page', fp_html)
 
-sp_url = fp_url + info[0]['searchss']
+sp_url = fp_url[:-1] + info[0]['searchss']
 sp_html = make_request(sp_url)
 make_html_file('html/main_pages/second_page', sp_html)
 
