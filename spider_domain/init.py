@@ -193,7 +193,7 @@ def print_result(i, domain, teas):
     print('---------------------------------')
 
 session = requests.session()
-name = 'knife'# input('insert word\n')
+name = input('insert word\n')
 fp_url = 'http://tmsearch.uspto.gov/'
 info = get_key(fp_url)
 key = info[0]['key']
