@@ -24,6 +24,7 @@ def make_request(url):
     try:
         r = session.get(url, headers=headers, timeout=10)
     except:
+        r = session.get(url, headers=headers, timeout=10)
         print('Connection lost!')
         return
     if '503 Service Unavailable' in r.text.encode('utf-8').decode('cp1251'): print('503 Error!')
@@ -54,7 +55,6 @@ def make_html_file(src, html):
         except:
             output_file.write('None')
 
-
 def make_TSDRs(html, key):
     soup = BeautifulSoup(html, 'lxml')
     TSDRS = []
@@ -64,7 +64,10 @@ def make_TSDRs(html, key):
             TSDRS.append(i.get('href'))
     while len(TSDRS) >= 50 and len(TSDRS) % 50 == 0:
         at = len(TSDRS) + 1 
-        url2= f"http://tmsearch.uspto.gov/bin/showfield?f=toc&state={key[:-4]}.2.{at}"
+        try:
+            url2= f"http://tmsearch.uspto.gov/bin/showfield?f=toc&state={key[:-4]}.2.{at}"
+        except:
+            break
         html2 = BeautifulSoup(make_request(url2), 'lxml')
         hrefs2 = html2.find_all('a')
         for j in hrefs2:
@@ -79,10 +82,10 @@ def make_TEASes(TSDRS):
         url = f'https://tsdr.uspto.gov/docsview/sn{number}'
         cnt = 0
         while True:
-            if cnt == 10: make_html_file(f'html/TSDRS/TSDR_{number}', 'reached the limit of requests')
+            if cnt == 10: make_html_file(f'html/TSDRS/TSDR_{number}', 'Reached the limit of requests')
             try: html = make_request(url)
             except:
-                make_html_file(f'html/TSDRS/TSDR_{number}', 'permission denied')
+                make_html_file(f'html/TSDRS/TSDR_{number}', 'Permission denied')
             try:
                 if '503 Service Unavailable' not in html: break
             except: break
