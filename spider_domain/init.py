@@ -81,8 +81,11 @@ def make_TEASes(TSDRS):
         while True:
             if cnt == 10: make_html_file(f'html/TSDRS/TSDR_{number}', 'reached the limit of requests')
             try: html = make_request(url)
-            except: make_html_file(f'html/TSDRS/TSDR_{number}', 'permission denied')
-            if '503 Service Unavailable' not in html: break
+            except:
+                make_html_file(f'html/TSDRS/TSDR_{number}', 'permission denied')
+            try:
+                if '503 Service Unavailable' not in html: break
+            except: break
             cnt += 1
         make_html_file(f'html/TSDRS/TSDR_{number}', html)
 
