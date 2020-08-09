@@ -6,7 +6,6 @@ from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 
 def remove_files():
-    print('Removing old files...', end=" ")
     dirs = os.listdir('.')
     for d in dirs:
         if '.' in d: continue
@@ -16,14 +15,17 @@ def remove_files():
             for j in files:
                 try: os.remove(f'{d}/{i}/{j}')
                 except: continue
-    print('Ok!')
 
 def make_request(url):
     print(f'Request to {url}...', end=" ")
     headers = {
     'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.143 Safari/537.36'
     }
-    r = session.get(url, headers=headers, timeout=5)
+    try:
+        r = session.get(url, headers=headers, timeout=10)
+    except:
+        print('Connection lost!')
+        return
     if '503 Service Unavailable' in r.text.encode('utf-8').decode('cp1251'): print('503 Error!')
     else: print('Ok!')
     return r.text.encode('utf-8').decode('cp1251')
@@ -37,10 +39,9 @@ def get_key(url):
             break
     key = searchss.split('state=')[1]
     info = {'searchss': searchss, 'key': key}
-    return info
+    return [info, html]
 
 def make_html_file(src, html):
-    print(f"Making file {src.split('/')[-1]}.html...", end=" ")
     folder = src.split('/')[0]
     subfolder = src.split('/')[1]
     if folder not in os.listdir():
@@ -48,8 +49,10 @@ def make_html_file(src, html):
     if subfolder not in os.listdir(folder):
         os.mkdir(f'{folder}/{subfolder}/')
     with open(f'{src}.html', 'w') as output_file:
-        output_file.write(html)
-    print('Ok!')
+        try:
+            output_file.write(html)
+        except:
+            output_file.write('None')
 
 def make_TSDRs(html):
     soup = BeautifulSoup(html, 'lxml')
@@ -86,12 +89,13 @@ def make_TEASes(TSDRS):
 
 def parse_TEASEs(TEASES):
     index = 0
-    domains = []
+    result = []
     for i in TEASES:
+        domains = set()
         html = make_request(i)
         make_html_file(f'html/TEASES/TEAS_{index}', html)
-        print(f'Parsing TEAS_{index}...', end=" ")
-        soup = BeautifulSoup(html, 'lxml')
+        try: soup = BeautifulSoup(html, 'lxml')
+        except: continue
         titles = ['SERIAL NUMBER']
         for i in soup.find_all('th', colspan='2'): titles.append(i.text)
         parsed = {}
@@ -109,42 +113,35 @@ def parse_TEASEs(TEASES):
                 th = tr.find('th', headers='input').text.replace('\n', '').replace('\t', '').replace('*', '').strip()
                 td = tr.find('td', headers='entered').text.replace('\n', '').replace('\t', '').replace('*', '').strip()
                 if '@' in td and ';' in td:
-                    for i in td.split(';'): domains.append(i.strip())
-                elif '@' in td: domains.append(td)
+                    for i in td.split(';'): 
+                        domains.add(i.strip().split('@')[1])
+                elif '@' in td: domains.add(td.strip().split('@')[1])
                 elems[th] = td
             except: continue
-        print('Ok!')
-        print(f'Making file TEAS_{index}.py...', end=" ")
-        if 'py' not in os.listdir():
-            os.mkdir('py')
-        if 'parsed_TEASes' not in os.listdir('py'):
-            os.mkdir('py/parsed_TEASes/')
-        with open(f'py/parsed_TEASes/TEAS_{index}.py', 'w') as TEAS:
-            TEAS.write(f'TEAS = {parsed}')
-        print('Ok!')
+        teas = parsed
+        for domain in domains:
+            parsed_domain = parse_domains(index, domain, teas)
+            result.append(parsed_domain)
         index += 1
-    return domains
+    return result
 
 def make_json(url):
     print(f'Request to {url}...', end=" ")
-    with urllib.request.urlopen(url) as url:
+    with urllib.request.urlopen(url, timeout=30) as url:
         data = json.loads(url.read().decode())
     print('Ok!')
     return data
     
-def make_file(data, cnt, domain):
-    print(f'Making file domain_{cnt}.py...', end=" ")
+def make_file(data, cnt, domain, teas):
     if 'py' not in os.listdir():
         os.mkdir('py')
     if 'parsed_domains' not in os.listdir('py'):
         os.mkdir('py/parsed_domains/')
-    with open(f'py/parsed_domains/domain_{cnt}.py', 'w') as dom_file:
-        domain = domain.split('.')[0].replace('-', '_')
-        dom_file.write(f'_{domain}={data}')
-    print('Ok!')
+    domain = domain.split('.')[0].replace('-', '_')
+    with open(f'py/parsed_domains/{cnt}_{domain}.py', 'w') as dom_file:
+        dom_file.write(f'_{domain} = {data}, {{\'TEAS\': {teas}}}')
 
 def parse_domain(data, domain):
-    print(f'Parsing domain {domain}...', end=" ")
     whois_arr = data['whois'].split('\r\n')
     data['whois'] = {}
     for i in whois_arr:
@@ -154,44 +151,48 @@ def parse_domain(data, domain):
         key = key_value[0].strip()
         value = key_value[1].strip()
         data['whois'][key] = value
-    print('Ok!')
     return data   
 
-def parse_domains(domains):
-    domain = set()
-    for i in domains:
-        domain.add(i.split('@')[1])
-    domains = domain
-    cnt = 0
-    result = {}
-    free_domains = {}
-    for domain in domains:
-        url = f'http://api.whois.vu/?q={domain}'
-        try:
-            data = make_json(url)
-            data = parse_domain(data, domain)
-            make_file(data, cnt, domain)
-            result[domain] = datetime.fromtimestamp(data['expires'])
-            if (datetime.now() + timedelta(7) > datetime.fromtimestamp(data['expires'])):
-                free_domains[domain] = data
-            cnt += 1
-        except:
-            print(f'Something went wrong with domain: {domain}')
-            continue
-    return [result, free_domains]
+def parse_domains(cnt, domain, teas):
+    dictionary = {}
+    result = ''
+    url = f'http://api.whois.vu/?q={domain}'
+    try:
+        data = make_json(url)
+        data = parse_domain(data, domain)
+        dictionary[domain] = data
+        dictionary['teas'] = teas
+        result = dictionary
+        make_file(data, cnt, domain, teas)
+    except:
+        print(f'Request took more than 30 sec: {domain}')
+    return result
+
+def print_result(i, domain, teas):
+    try: print(f"Domain: {i[domain]['domain']}")
+    except: print('Domain: unknown')
+    try: print(f"Expires: {datetime.fromtimestamp(i[domain]['expires'])}")
+    except: print('Expires: unknown')
+    try: print(f"Serial number: {i[teas]['SERIAL NUMBER']['SERIAL NUMBER']}")
+    except: print('Serial number: unknown')
+    try:
+        if 'IMAGEOUT' not in i[teas]['MARK INFORMATION']['MARK']:
+            print(f"Mark: {i[teas]['MARK INFORMATION']['MARK']}")
+    except: print('Mark: unknown')
+    print('---------------------------------')
 
 session = requests.session()
 name = input('insert word\n')
 fp_url = 'http://tmsearch.uspto.gov/'
 info = get_key(fp_url)
-key = info['key']
+key = info[0]['key']
 
 remove_files()
 
-fp_html = make_request(fp_url)
+fp_html = info[1]
 make_html_file('html/main_pages/first_page', fp_html)
 
-sp_url = fp_url + info['searchss']
+sp_url = fp_url + info[0]['searchss']
 sp_html = make_request(sp_url)
 make_html_file('html/main_pages/second_page', sp_html)
 
@@ -201,18 +202,26 @@ make_html_file('html/main_pages/third_page', tp_html)
 
 TSDRS = make_TSDRs(tp_html)
 TEASES = make_TEASes(TSDRS)
-domains = parse_TEASEs(TEASES)
-array = parse_domains(domains)
-result = array[0]
-free_domains = array[1]
-print('All done!')
-print(f'Found {len(result)} domains\nExpire dates:')
+result = parse_TEASEs(TEASES)
+
+print('---------------------------------\n')
+print(f"Found {len(result)} domains:")
+print('\n---------------------------------')
+free_domains = []
 for i in result:
-    print(f'{i}: {result[i]}')
+    try:
+        domain, teas = i.keys()
+        print_result(i, domain, teas)
+        if (datetime.now() + timedelta(7) > datetime.fromtimestamp(i[domain]['expires'])):
+            free_domains.append(i)
+    except:
+        continue
+
+print(f"\nFound {len(free_domains)} free domains\n")
+print('---------------------------------')
 if len(free_domains) > 0:
-    print(f'Found free domain(s): {free_domains}')
-    print('Expire dates:')
     for i in free_domains:
-        print(f"{i}: {datetime.fromtimestamp(free_domains[i]['expires'])}")
-else:
-    print('There\'s no expired domain')
+        try:
+            domain, teas = i.keys()
+            print_result(i, domain, teas)
+        except: continue
